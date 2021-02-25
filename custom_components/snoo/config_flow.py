@@ -1,8 +1,8 @@
 """Config flow for Snoo integration."""
 import logging
 
-import pysnoo
-from pysnoo.errors import InvalidCredentialsError, SnooError
+from . import pysnoo
+from .pysnoo.errors import InvalidCredentialsError, SnooError
 import voluptuous as vol
 
 from homeassistant import config_entries, core, exceptions

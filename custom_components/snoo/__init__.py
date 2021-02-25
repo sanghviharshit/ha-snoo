@@ -3,8 +3,8 @@ import asyncio
 from datetime import timedelta
 import logging
 
-import pysnoo
-from pysnoo.errors import InvalidCredentialsError, SnooError
+from . import pysnoo
+from .pysnoo.errors import InvalidCredentialsError, SnooError
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
