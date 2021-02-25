@@ -27,7 +27,7 @@ def parse_datetime(dt_str: str) -> Optional[datetime.datetime]:
     Raises ValueError if the input is well formatted but not a valid datetime.
     Returns None if the input isn't well formatted.
     """
-    if type(dt_str) == datetime.datetime:
+    if dt_str is None or type(dt_str) == datetime.datetime:
         return dt_str
     try:
         return ciso8601.parse_datetime(dt_str)
