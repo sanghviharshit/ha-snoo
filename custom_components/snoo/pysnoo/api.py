@@ -16,7 +16,9 @@ from .const import (
   BABY_URI,
   DEVICE_CONFIGS_URI,
   ACCOUNT_URI,
-  SESSION_URI
+  SESSION_URI,
+  SESSION_STATS_DAILY_URI,
+  SESSION_STATS_AVG_URI
 )
 from .device import SnooDevice
 from .errors import AuthenticationError, InvalidCredentialsError, RequestError
@@ -54,13 +56,6 @@ class API:  # pylint: disable=too-many-instance-attributes
         self.baby = None # type: Dict
         self.devices = {}  # type: Dict[str, SnooDevice]
         self.last_state_update = None  # type: Optional[datetime]
-
-    @property
-    def snoos(self) -> Dict[str, SnooDevice]:
-        return {
-            device_id: device
-            for device_id, device in self.devices.items()
-        }
 
     @property
     def username(self) -> str:
@@ -281,39 +276,6 @@ class API:  # pylint: disable=too-many-instance-attributes
 
         return token, refresh_token, expires
 
-    async def authenticate(self, wait: bool = True) -> Optional[asyncio.Task]:
-        """Authenticate and get a security token."""
-        if self.username is None or self.__credentials["password"] is None:
-            message = "No username/password, most likely due to previous failed authentication."
-            _LOGGER.debug(message)
-            raise InvalidCredentialsError(message)
-
-        if self._invalid_credentials:
-            message = "Credentials are invalid, update username/password to re-try authentication."
-            _LOGGER.debug(message)
-            raise InvalidCredentialsError(message)
-
-        if self._authentication_task is None:
-            # No authentication task is currently running, start one
-            _LOGGER.debug(
-                f"Scheduling token refresh, last refresh was {self._security_token[3]}"
-            )
-            self._authentication_task = asyncio.create_task(
-                self._authenticate(), name="Snoo_Authenticate"
-            )
-
-        if wait:
-            try:
-                await self._authentication_task
-            except (RequestError, AuthenticationError) as auth_err:
-                # Raise authentication error, we need a new token to continue and not getting it right
-                # now.
-                self._authentication_task = None
-                raise AuthenticationError(str(auth_err))
-            self._authentication_task = None
-
-        return self._authentication_task
-
     async def _authenticate(self) -> None:
         # Retrieve and store the initial security token:
         _LOGGER.debug("Initiating authentication")
@@ -341,7 +303,6 @@ class API:  # pylint: disable=too-many-instance-attributes
         )
 
     async def _refresh_token(self) -> Tuple[str, str, int]:
-
         # Retrieve and store the initial security token:
         _LOGGER.debug("Refreshing token")
 
@@ -383,9 +344,42 @@ class API:  # pylint: disable=too-many-instance-attributes
             )
             expires = DEFAULT_TOKEN_REFRESH * 2
 
-        return token, refresh_tokn, expires
+        return token, refresh_token, expires
 
-    async def _get_account(self) -> Optional[dict]:
+    async def authenticate(self, wait: bool = True) -> Optional[asyncio.Task]:
+        """Authenticate and get a security token."""
+        if self.username is None or self.__credentials["password"] is None:
+            message = "No username/password, most likely due to previous failed authentication."
+            _LOGGER.debug(message)
+            raise InvalidCredentialsError(message)
+
+        if self._invalid_credentials:
+            message = "Credentials are invalid, update username/password to re-try authentication."
+            _LOGGER.debug(message)
+            raise InvalidCredentialsError(message)
+
+        if self._authentication_task is None:
+            # No authentication task is currently running, start one
+            _LOGGER.debug(
+                f"Scheduling token refresh, last refresh was {self._security_token[3]}"
+            )
+            self._authentication_task = asyncio.create_task(
+                self._authenticate(), name="Snoo_Authenticate"
+            )
+
+        if wait:
+            try:
+                await self._authentication_task
+            except (RequestError, AuthenticationError) as auth_err:
+                # Raise authentication error, we need a new token to continue and not getting it right
+                # now.
+                self._authentication_task = None
+                raise AuthenticationError(str(auth_err))
+            self._authentication_task = None
+
+        return self._authentication_task
+
+    async def get_account(self) -> Optional[dict]:
 
         _LOGGER.debug("Retrieving account information")
 
@@ -408,7 +402,7 @@ class API:  # pylint: disable=too-many-instance-attributes
 
     async def _get_device_details(self) -> None:
 
-        _LOGGER.debug(f"Retrieving devices for account {self.account}")
+        _LOGGER.debug(f"Retrieving devices for account {self.account['givenName']}")
 
         _, devices_resp = await self.request(
             method="get",
@@ -435,8 +429,8 @@ class API:  # pylint: disable=too-many-instance-attributes
                     f"Updating information for device with serial number {serial_number}"
                 )
 
-                config_json = await self._get_configs_for_device(snoodevice)
-                session_json = await self._get_session_for_account()
+                config_json = await self.get_configs_for_device(snoodevice)
+                session_json = await self.get_session_for_account()
                 last_update = snoodevice.last_update
 
                 snoodevice.device = device_json
@@ -453,7 +447,7 @@ class API:  # pylint: disable=too-many-instance-attributes
 
                 snoodevice.device_state_update = device_state_update_timestmp
         else:
-            _LOGGER.debug(f"No devices found for account {self.account}")
+            _LOGGER.debug(f"No devices found for account {self.account['givenName']}")
 
         return self.devices
 
@@ -474,7 +468,7 @@ class API:  # pylint: disable=too-many-instance-attributes
 
         return self.devices[serial_number]
 
-    async def _get_baby_for_account(self) -> None:
+    async def get_baby_for_account(self) -> None:
 
         _LOGGER.debug(f"Retrieving baby details for account {self.account['givenName']}")
         baby = None
@@ -488,14 +482,14 @@ class API:  # pylint: disable=too-many-instance-attributes
           baby = baby_resp
         else:
             _LOGGER.debug(
-                f"No baby found for account {self.account}"
+                f"No baby found for account {self.account['givenName']}"
             )
         return baby
 
-    async def _get_session_for_account(self) -> None:
+    async def get_session_for_account(self) -> Dict:
         # Session information is for the account, not specific to a device for some reason.
         # Don't know how this will work with multiple devices in the same account.
-        _LOGGER.debug(f"Retrieving last session details for account {self.account}")
+        _LOGGER.debug(f"Retrieving last session details for account {self.account['givenName']}")
         session = None
         _, session_resp = await self.request(
             method="get",
@@ -507,11 +501,73 @@ class API:  # pylint: disable=too-many-instance-attributes
           session = session_resp
         else:
             _LOGGER.debug(
-                f"No session found for account {self.account}"
+                f"No session found for account {self.account['givenName']}"
             )
         return session
 
-    async def _get_configs_for_device(self, device) -> Dict:
+    async def get_session_stats_daily_for_account(self, startTime: datetime, detailedLevels=False, levels=True) -> Dict:
+        _LOGGER.debug(f"Retrieving session details for given day for account {self.account['givenName']}")
+
+        if self.account is None:
+            self.account = await self.get_account()
+        if self.baby is None:
+            self.baby = await self.get_baby_for_account()
+
+        params = {
+            "detailedLevels": str(detailedLevels).lower(),
+            "levels": str(levels).lower(),
+            "startTime": startTime.isoformat()[:-3]+'Z'     # e.g. "2021-02-04T08:00:00.000Z"
+        }
+
+        _LOGGER.debug(f"PARAMS {params}")
+
+        session_stats_daily = None
+        _, session_stats_daily_resp = await self.request(
+            method="get",
+            returns="json",
+            url=f"{BASE_ENDPOINT}{SESSION_STATS_DAILY_URI}".format(baby_id=self.baby.get("_id")),
+            params=params
+        )
+
+        if session_stats_daily_resp is not None:
+          session_stats_daily = session_stats_daily_resp
+        else:
+            _LOGGER.debug(
+                f"No session stats found for account {self.account['givenName']} with startTime {startTime}"
+            )
+        return session_stats_daily
+
+    async def get_session_stats_avg_for_account(self, startTime: datetime, days=False, interval="week") -> Dict:
+        _LOGGER.debug(f"Retrieving session details for given day for account {self.account['givenName']}")
+
+        if self.account is None:
+            self.account = await self.get_account()
+        if self.baby is None:
+            self.baby = await self.get_baby_for_account()
+
+        params = {
+            "days": str(days).lower(),
+            "interval": interval,
+            "startTime": startTime.isoformat()[:-3]+'Z'     # e.g. "2021-02-04T08:00:00.000Z"
+        }
+
+        session_stats_avg = None
+        _, session_stats_avg_resp = await self.request(
+            method="get",
+            returns="json",
+            url=f"{BASE_ENDPOINT}{SESSION_STATS_AVG_URI}".format(baby_id=self.baby.get("_id")),
+            params=params
+        )
+
+        if session_stats_avg_resp is not None:
+          session_stats_avg = session_stats_avg_resp
+        else:
+            _LOGGER.debug(
+                f"No session stats found for account {self.account['givenName']} with startTime {startTime}"
+            )
+        return session_stats_avg
+
+    async def get_configs_for_device(self, device) -> Dict:
         serial_number = device.device_id
         _LOGGER.debug(f"Retrieving configs for device {serial_number}")
 
@@ -552,14 +608,14 @@ class API:  # pylint: disable=too-many-instance-attributes
                 )
                 # Only update session details
                 for device_id, device in self.devices.items():
-                    device.session = await self._get_session_for_account()
+                    device.session = await self.get_session_for_account()
                 return
 
             _LOGGER.debug("Updating device information")
             if self.account is None:
-                self.account = await self._get_account()
+                self.account = await self.get_account()
             if self.baby is None:
-                self.baby = await self._get_baby_for_account()
+                self.baby = await self.get_baby_for_account()
 
             await self._get_device_details()
             if self.devices is None:
