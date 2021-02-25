@@ -5,5 +5,5 @@
   "documentation": "https://github.com/sanghviharshit",
   "domain": "snoo",
   "name": "Snoo",
-  "requirements": ["pytz==2021.1"]
+  "requirements": ["pysnooapi>=0.0.2", "pytz==2021.1"]
 }

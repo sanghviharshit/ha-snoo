@@ -1,8 +1,8 @@
 """Config flow for Snoo integration."""
 import logging
 
-from . import pysnoo
-from .pysnoo.errors import InvalidCredentialsError, SnooError
+import pysnooapi
+from pysnooapi.errors import InvalidCredentialsError, SnooError
 import voluptuous as vol
 
 from homeassistant import config_entries, core, exceptions
@@ -26,14 +26,13 @@ async def validate_input(hass: core.HomeAssistant, data):
     websession = aiohttp_client.async_get_clientsession(hass)
 
     try:
-        await pysnoo.login(data[CONF_USERNAME], data[CONF_PASSWORD], websession)
+        await pysnooapi.login(data[CONF_USERNAME], data[CONF_PASSWORD], websession)
     except InvalidCredentialsError as err:
         raise InvalidAuth from err
     except SnooError as err:
         raise CannotConnect from err
 
     return {"title": data[CONF_USERNAME]}
-
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Snoo."""

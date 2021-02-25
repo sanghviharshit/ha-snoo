@@ -1,5 +1,5 @@
 """Support for Snoo devices."""
-from .pysnoo.const import (
+from pysnooapi.const import (
     MANUFACTURER
 )
 
