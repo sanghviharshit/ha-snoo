@@ -1,0 +1,9 @@
+{
+  "codeowners": ["@sanghviharshit"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/sanghviharshit",
+  "domain": "snoo",
+  "name": "Snoo",
+  "requirements": ["pytz==2021.1"]
+}
